@@ -45,7 +45,10 @@ fn lookup_asn(addr: IpAddr) -> LookupAsnResult {
             asn: result.autonomous_system_number.unwrap(),
             asn_organization: String::from(result.autonomous_system_organization.unwrap()),
         },
-        Err(_) => asn_result_default,
+        Err(error) => {
+            println!("lookup_asn(addr: {addr:#?}) error: {error:#?}");
+            asn_result_default
+        },
     };
 
     // Return the result
@@ -96,10 +99,57 @@ fn lookup_city(addr: IpAddr) -> LookupCityResult {
     // Unwrap a result or use the default value
     let city_result = match city_lookup_result {
         Ok(result) => {
-            // Unwrap since some values will be referenced more than once
-            let continent = result.continent.unwrap();
-            let country = result.country.unwrap();
-            let subdivisions = result.subdivisions.unwrap();
+            // <Result>.city -> String
+            let city = match result.city {
+                None => String::from("-"),
+                // TODO: needs a cleaner method like: `result.city?.names.get("en", "-")`
+                _ => result.city.unwrap().names.unwrap().get("en").unwrap().to_string(),
+            };
+
+            // <Result>.continent -> (String, String)
+            let continent = match result.continent {
+                None => (
+                    String::from("-"),
+                    String::from("-"),
+                ),
+                _ => {
+                    let continent = result.continent.unwrap();
+                    (
+                        continent.code.unwrap().to_string(),
+                        continent.names.unwrap().get("en").unwrap().to_string(),
+                    )
+                },
+            };
+
+            // <Result>.country -> (String, String)
+            let country = match result.country {
+                None => (
+                    String::from("-"),
+                    String::from("-"),
+                ),
+                _ => {
+                    let country = result.country.unwrap();
+                    (
+                        country.iso_code.unwrap().to_string(),
+                        country.names.unwrap().get("en").unwrap().to_string(),
+                    )
+                },
+            };
+
+            // <Result>.subdivisions -> (String, String)
+            let subdivisions = match result.subdivisions {
+                None => (
+                    String::from("-"),
+                    String::from("-"),
+                ),
+                _ => {
+                    let subdivisions = result.subdivisions.unwrap();
+                    (
+                        subdivisions[0].iso_code.unwrap().to_string(),
+                        subdivisions[0].names.as_ref().unwrap().get("en").unwrap().to_string(),
+                    )
+                },
+            };
 
             // These fields exist in the database but are not used here
             // <Result>.location
@@ -108,22 +158,16 @@ fn lookup_city(addr: IpAddr) -> LookupCityResult {
             // <Result>.traits
 
             LookupCityResult {
-                city: result.city.unwrap().names.unwrap().get("en").unwrap().to_string(),
-                continent: (
-                    continent.code.unwrap().to_string(),
-                    continent.names.unwrap().get("en").unwrap().to_string(),
-                ),
-                country: (
-                    country.iso_code.unwrap().to_string(),
-                    country.names.unwrap().get("en").unwrap().to_string(),
-                ),
-                subdivisions: (
-                    subdivisions[0].iso_code.unwrap().to_string(),
-                    subdivisions[0].names.as_ref().unwrap().get("en").unwrap().to_string(),
-                ),
+                city: city,
+                continent: continent,
+                country: country,
+                subdivisions: subdivisions,
             }
         },
-        Err(_) => city_result_default,
+        Err(error) => {
+            println!("lookup_city(addr: {addr:#?}) error: {error:#?}");
+            city_result_default
+        },
     };
 
     // Return the result
