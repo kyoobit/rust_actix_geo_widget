@@ -1,18 +1,40 @@
 use std::net::IpAddr;
 
+// A web framework for Rust
 // https://docs.rs/actix-web/latest/actix_web/web/index.html
-use actix_web::{get, web, App, HttpServer, Responder, Result};
+// cargo add actix-web
+use actix_web::{
+    App,
+    HttpServer, 
+    get,
+    middleware::Logger,
+    web,
+    Responder,
+    Result
+};
+
+// Command Line Argument Parser for Rust
+// https://docs.rs/clap/latest/clap/
+// cargo add clap --features derive
+use clap::Parser;
+
+// A simple logger
+// https://docs.rs/actix-web/latest/actix_web/middleware/struct.Logger.html
+// https://docs.rs/env_logger/latest/env_logger/
+// cargo add env_logger
+
+// A reader for the MaxMind DB format
+// https://docs.rs/maxminddb/latest/maxminddb/
+// http://oschwald.github.io/maxminddb-rust/maxminddb/struct.Reader.html
+// cargo add maxminddb
+use maxminddb::{geoip2, MaxMindDBError};
 
 // https://docs.rs/serde/latest/serde/
 // https://serde.rs
 use serde::{Deserialize, Serialize};
 
-// https://github.com/oschwald/maxminddb-rust
-// http://oschwald.github.io/maxminddb-rust/maxminddb/struct.Reader.html
-use maxminddb::{geoip2, MaxMindDBError};
 
-
-// ...
+/// LookupAsnResult structure
 #[derive(Clone, Debug, Deserialize)]
 struct LookupAsnResult {
     asn: u32,
@@ -20,8 +42,13 @@ struct LookupAsnResult {
 }
 
 
-/// Lookup ASN information for the IP address
-fn lookup_asn(addr: IpAddr) -> LookupAsnResult {
+/// Return a LookupAsnResult structure for an IP address
+fn lookup_asn(
+    asn_database_file: &String,
+    addr: IpAddr,
+    debug: bool,
+    verbose: bool,
+) -> LookupAsnResult {
     // Default values to be used on any error
     let asn_result_default = LookupAsnResult {
         asn: 0,
@@ -29,11 +56,11 @@ fn lookup_asn(addr: IpAddr) -> LookupAsnResult {
     };
 
     // Create a handle to the GeoLite2-ASN.mmdb
-    // TODO: Abstract the path to this file
-    // TODO: Should this be a global of some sort?
     // http://oschwald.github.io/maxminddb-rust/maxminddb/geoip2/index.html
     // http://oschwald.github.io/maxminddb-rust/maxminddb/geoip2/struct.Asn.html
-    let geo_lite2_asn_reader = maxminddb::Reader::open_readfile("GeoLite2-ASN.mmdb").unwrap();
+    let geo_lite2_asn_reader = maxminddb::Reader::open_readfile(
+        asn_database_file)
+        .unwrap();
 
     // Lookup the ASN information for the IP address
     let asn_lookup_result: Result<geoip2::Asn, MaxMindDBError> = geo_lite2_asn_reader.lookup(addr);
@@ -46,7 +73,12 @@ fn lookup_asn(addr: IpAddr) -> LookupAsnResult {
             asn_organization: String::from(result.autonomous_system_organization.unwrap()),
         },
         Err(error) => {
-            println!("lookup_asn(addr: {addr:#?}) error: {error:#?}");
+            if debug {
+                println!("lookup_asn(addr: {addr:#?}) error: {error:#?}");
+            }
+            if verbose {
+                //TODO:
+            }
             asn_result_default
         },
     };
@@ -56,7 +88,7 @@ fn lookup_asn(addr: IpAddr) -> LookupAsnResult {
 }
 
 
-// ...
+/// LookupCityResult structure
 #[derive(Clone, Debug, Deserialize)]
 struct LookupCityResult {
     city: String,
@@ -66,8 +98,13 @@ struct LookupCityResult {
 }
 
 
-/// Lookup City information for the IP address
-fn lookup_city(addr: IpAddr) -> LookupCityResult {
+/// Return a LookupCityResult structure for an IP address
+fn lookup_city(
+    city_database_file: &String,
+    addr: IpAddr,
+    debug: bool,
+    verbose: bool,
+) -> LookupCityResult {
     // Default values to be used on any error
     let city_result_default = LookupCityResult {
         city: String::from("-"),
@@ -86,11 +123,11 @@ fn lookup_city(addr: IpAddr) -> LookupCityResult {
     };
 
     // Create a handle to the GeoLite2-City.mmdb
-    // TODO: Abstract the path to this file
-    // TODO: Should this be a global of some sort?
     // http://oschwald.github.io/maxminddb-rust/maxminddb/geoip2/index.html
     // http://oschwald.github.io/maxminddb-rust/maxminddb/geoip2/struct.Asn.html
-    let geo_lite2_city_reader = maxminddb::Reader::open_readfile("GeoLite2-City.mmdb").unwrap();
+    let geo_lite2_city_reader = maxminddb::Reader::open_readfile(
+        city_database_file)
+        .unwrap();
 
     // Lookup the City information for the IP address
     let city_lookup_result: Result<geoip2::City, MaxMindDBError> = geo_lite2_city_reader.lookup(addr);
@@ -151,7 +188,7 @@ fn lookup_city(addr: IpAddr) -> LookupCityResult {
                 },
             };
 
-            // These fields exist in the database but are not used here
+            // These fields exist in the data but are not used here
             // <Result>.location
             // <Result>.postal
             // <Result>.registered_country
@@ -165,7 +202,12 @@ fn lookup_city(addr: IpAddr) -> LookupCityResult {
             }
         },
         Err(error) => {
-            println!("lookup_city(addr: {addr:#?}) error: {error:#?}");
+            if debug {
+                println!("lookup_city(addr: {addr:#?}) error: {error:#?}");
+            }
+            if verbose {
+                //TODO:
+            }
             city_result_default
         },
     };
@@ -175,7 +217,7 @@ fn lookup_city(addr: IpAddr) -> LookupCityResult {
 }
 
 
-/// Lookup City information for the IP address
+/// Return a Lookup summary structure 
 fn get_summary(asn: &LookupAsnResult, city: &LookupCityResult) -> String {
     // "<CITY>,<STATE>/<COUNTRY>; <AS NAME> (<ASN>);"
     let mut summary = String::new();
@@ -193,14 +235,7 @@ fn get_summary(asn: &LookupAsnResult, city: &LookupCityResult) -> String {
 }
 
 
-// ...
-#[derive(Debug, Deserialize)]
-struct RequestPath {
-    address: String,
-}
-
-
-// ...
+/// LookupResult structure
 #[derive(Serialize)]
 struct LookupResult {
     address: IpAddr,
@@ -214,18 +249,40 @@ struct LookupResult {
 }
 
 
-// Handle requests to lookup a specific address
+/// RequestPath structure
+#[derive(Debug, Deserialize)]
+struct RequestPath {
+    address: String,
+}
+
+
+/// Return a LookupResult in JSON format for an IP address
 #[get("/address/{address}")]
-async fn address(path: web::Path<RequestPath>) -> Result<impl Responder> {
+async fn address(
+    data: web::Data<AppData>,
+    path: web::Path<RequestPath>,
+) -> Result<impl Responder> {
     // Convert the address String into an IpAddr
     // TODO: Conversion error handling -> 400 Client Error
     let address = path.address.parse::<IpAddr>().unwrap();
 
     // Lookup the ASN information for the IP address
-    let asn_result = lookup_asn(address);
+    let asn_database_file = &data.asn_database_file;
+    let asn_result = lookup_asn(
+        asn_database_file,
+        address,
+        data.debug,
+        data.verbose,
+    );
 
     // Lookup the City information for the IP address
-    let city_result = lookup_city(address);
+    let city_database_file = &data.city_database_file;
+    let city_result = lookup_city(
+        city_database_file,
+        address,
+        data.debug,
+        data.verbose,
+    );
 
     // Get a summary of the information
     let summary = get_summary(&asn_result, &city_result);
@@ -248,12 +305,17 @@ async fn address(path: web::Path<RequestPath>) -> Result<impl Responder> {
 }
 
 
-// Handle requests to lookup the requesting client's address
+/// Return a LookupResult in JSON format for the requesting client's IP address
 #[get("/address/")]
 async fn default() -> Result<impl Responder> {
-    // Check Forwarded request header
-    // Check X-Forwarded-For request header
-    // Default to ...
+    // Check "Forwarded" HTTP request header for a "for=<ADDRESS>"
+
+    // Check "X-Forwarded-For" HTTP request header
+    // Ass-u-me the first public address is the header value is the client's
+
+    // Default to the address used to make the request (sans proxy)
+
+    // https://docs.rs/actix-web/latest/actix_web/web/struct.Header.html
 
     /*
     // Convert the address String into an IpAddr
@@ -288,19 +350,122 @@ async fn default() -> Result<impl Responder> {
     Ok(web::Json(result))
     */
 
-    Ok("okay")
+    Ok("not implement yet\n")
+}
+
+
+// Pong response structure
+#[derive(Debug, Deserialize, Serialize)]
+struct PongResponse {
+    ping: String,
+}
+
+
+// Ping/Pong response handler
+#[get("/ping")]
+async fn ping() -> Result<impl Responder> {
+    // Respond with a pong response as a sanity check
+    let pong = "pong".to_string();
+    let result = PongResponse {
+        ping: pong,
+    };
+
+    // Format the result into JSON
+    // https://docs.rs/actix-web/latest/actix_web/web/struct.Json.html
+    Ok(web::Json(result))
+}
+
+
+// ...
+struct AppData {
+    debug: bool,
+    verbose: bool,
+    asn_database_file: String,
+    city_database_file: String,
 }
 
 
 // ...
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
+async fn actix_main(args: Args) -> std::io::Result<()> {
+
+    // Configure the log level based on the cli arguments
+    // NOTE: Access logs are printed with the INFO level
+    // https://docs.rs/actix-web/latest/actix_web/middleware/struct.Logger.html
+    let log_level = if args.debug {
+        "debug"
+    } else if args.verbose {
+        "info"
+    } else {
+        "warn"
+    };
+    env_logger::init_from_env(
+        env_logger::Env::new()
+            .default_filter_or(log_level)
+    );
+
+    // Configure the log format
+    let log_format = "%a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T";
+
+    // Bring information from `args` into scope
+    let asn_database_file = args.asn_database_file;
+    let city_database_file = args.city_database_file;
+
+    // ...
     HttpServer::new(move || {
         App::new()
-        .service(address)
-        .service(default)
+            .wrap(Logger::new(log_format))
+            .app_data(web::Data::new(AppData {
+                debug: args.debug,
+                verbose: args.verbose,
+                asn_database_file: asn_database_file.clone(),
+                city_database_file: city_database_file.clone(),
+            }))
+            .service(address)
+            .service(default)
+            .service(ping)
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("0.0.0.0", args.port))?
     .run()
     .await
+}
+
+
+// Configure command-line options
+#[derive(Parser, Debug)]
+#[command(
+    about = "An API widget which provides geographic and network information for a given IP address.",
+    long_about = None,
+    version = None,
+)]
+struct Args {
+    /// The IP address to listen for requests
+    #[arg(short, long, default_value = "0.0.0.0")]
+    addr: String,
+
+    /// The port number to listen for requests
+    #[arg(short, long, default_value_t = 8888)]
+    port: u16,
+
+    /// File path to the ASN database
+    #[arg(long, default_value = "GeoLite2-ASN.mmdb")]
+    asn_database_file: String,
+
+    /// File path to the City database
+    #[arg(long, default_value = "GeoLite2-City.mmdb")]
+    city_database_file: String,
+
+    /// Increase log messaging to verbose
+    #[arg(short, long)]
+    verbose: bool,
+
+    /// Increase log messaging to debug
+    #[arg(long)]
+    debug: bool,
+}
+
+// CLI configuration options using clap
+fn main() {
+    let args = Args::parse();
+    let _ = actix_main(args);
 }
