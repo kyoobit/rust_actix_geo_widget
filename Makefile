@@ -5,22 +5,35 @@ help: ## Print a list of make options available
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' ${MAKEFILE_LIST} | sort | \
 	awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-clean: ## Clean the project using cargo
-	cargo clean
+update: ## update rust and dependencies to the latest version
+	@echo "Update Rust toolchains and rustup"
+	rustup update
+	@echo
+	@echo "Update dependencies for this project"
+	cp Cargo.toml Cargo.toml.bak
+	head -n 6 Cargo.toml.bak > Cargo.toml
+	for item in $$(awk '(NR>6 && $$0!~/features/){print $$1}' Cargo.toml.bak); do cargo add $${item}; done
+	for item in $$(awk '(NR>6 && $$0~/features.*derive/){print $$1}' Cargo.toml.bak); do cargo add $${item} --features derive; done
+	rm Cargo.toml.bak
+	@echo 
+	git diff Cargo.toml
 
-build: ## Build the project using cargo
-	cargo build
-
-test: ## Test the project using cargo
-	cargo test
+format: ## format the project using cargo
+	@rustup component add rustfmt 2> /dev/null
+	cargo fmt
 
 lint: ## Lint the project using cargo
 	@rustup component add clippy 2> /dev/null
 	cargo clippy
 
-fmt: ## format the project using cargo
-	@rustup component add rustfmt 2> /dev/null
-	cargo fmt
+test: ## Test the project using cargo
+	cargo test
+
+build: ## Build the project using cargo
+	cargo build
+
+clean: ## Clean the project using cargo
+	cargo clean
 
 bump: ## Bump the version number
 	@echo "Current version is $(shell cargo pkgid | cut -d# -f2)"
