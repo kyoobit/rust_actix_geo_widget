@@ -3,15 +3,7 @@ use std::net::IpAddr;
 // A web framework for Rust
 // https://docs.rs/actix-web/latest/actix_web/web/index.html
 // cargo add actix-web
-use actix_web::{
-    App,
-    HttpServer, 
-    get,
-    middleware::Logger,
-    web,
-    Responder,
-    Result
-};
+use actix_web::{get, middleware::Logger, web, App, HttpServer, Responder, Result};
 
 // Command Line Argument Parser for Rust
 // https://docs.rs/clap/latest/clap/
@@ -33,14 +25,12 @@ use maxminddb::{geoip2, MaxMindDBError};
 // https://serde.rs
 use serde::{Deserialize, Serialize};
 
-
 /// LookupAsnResult structure
 #[derive(Clone, Debug, Deserialize)]
 struct LookupAsnResult {
     asn: u32,
-    asn_organization: String, 
+    asn_organization: String,
 }
-
 
 /// Return a LookupAsnResult structure for an IP address
 fn lookup_asn(
@@ -58,16 +48,15 @@ fn lookup_asn(
     // Create a handle to the GeoLite2-ASN.mmdb
     // http://oschwald.github.io/maxminddb-rust/maxminddb/geoip2/index.html
     // http://oschwald.github.io/maxminddb-rust/maxminddb/geoip2/struct.Asn.html
-    let geo_lite2_asn_reader = maxminddb::Reader::open_readfile(
-        asn_database_file)
-        .unwrap();
+    let geo_lite2_asn_reader = maxminddb::Reader::open_readfile(asn_database_file).unwrap();
 
     // Lookup the ASN information for the IP address
     let asn_lookup_result: Result<geoip2::Asn, MaxMindDBError> = geo_lite2_asn_reader.lookup(addr);
 
     // Handle lookup errors gracefully
     // Unwrap a result or use the default value
-    let asn_result = match asn_lookup_result {
+    // Return the result
+    match asn_lookup_result {
         Ok(result) => LookupAsnResult {
             asn: result.autonomous_system_number.unwrap(),
             asn_organization: String::from(result.autonomous_system_organization.unwrap()),
@@ -80,13 +69,9 @@ fn lookup_asn(
                 //TODO:
             }
             asn_result_default
-        },
-    };
-
-    // Return the result
-    return asn_result;
+        }
+    }
 }
-
 
 /// LookupCityResult structure
 #[derive(Clone, Debug, Deserialize)]
@@ -96,7 +81,6 @@ struct LookupCityResult {
     country: (String, String),
     subdivisions: (String, String),
 }
-
 
 /// Return a LookupCityResult structure for an IP address
 fn lookup_city(
@@ -108,29 +92,19 @@ fn lookup_city(
     // Default values to be used on any error
     let city_result_default = LookupCityResult {
         city: String::from("-"),
-        continent: (
-            String::from("-"),
-            String::from("-"),
-        ),
-        country: (
-            String::from("-"),
-            String::from("-"),
-        ),
-        subdivisions: (
-            String::from("-"),
-            String::from("-"),
-        ),
+        continent: (String::from("-"), String::from("-")),
+        country: (String::from("-"), String::from("-")),
+        subdivisions: (String::from("-"), String::from("-")),
     };
 
     // Create a handle to the GeoLite2-City.mmdb
     // http://oschwald.github.io/maxminddb-rust/maxminddb/geoip2/index.html
     // http://oschwald.github.io/maxminddb-rust/maxminddb/geoip2/struct.Asn.html
-    let geo_lite2_city_reader = maxminddb::Reader::open_readfile(
-        city_database_file)
-        .unwrap();
+    let geo_lite2_city_reader = maxminddb::Reader::open_readfile(city_database_file).unwrap();
 
     // Lookup the City information for the IP address
-    let city_lookup_result: Result<geoip2::City, MaxMindDBError> = geo_lite2_city_reader.lookup(addr);
+    let city_lookup_result: Result<geoip2::City, MaxMindDBError> =
+        geo_lite2_city_reader.lookup(addr);
 
     // Handle lookup errors gracefully
     // Unwrap a result or use the default value
@@ -140,52 +114,56 @@ fn lookup_city(
             let city = match result.city {
                 None => String::from("-"),
                 // TODO: needs a cleaner method like: `result.city?.names.get("en", "-")`
-                _ => result.city.unwrap().names.unwrap().get("en").unwrap().to_string(),
+                _ => result
+                    .city
+                    .unwrap()
+                    .names
+                    .unwrap()
+                    .get("en")
+                    .unwrap()
+                    .to_string(),
             };
 
             // <Result>.continent -> (String, String)
             let continent = match result.continent {
-                None => (
-                    String::from("-"),
-                    String::from("-"),
-                ),
+                None => (String::from("-"), String::from("-")),
                 _ => {
                     let continent = result.continent.unwrap();
                     (
                         continent.code.unwrap().to_string(),
                         continent.names.unwrap().get("en").unwrap().to_string(),
                     )
-                },
+                }
             };
 
             // <Result>.country -> (String, String)
             let country = match result.country {
-                None => (
-                    String::from("-"),
-                    String::from("-"),
-                ),
+                None => (String::from("-"), String::from("-")),
                 _ => {
                     let country = result.country.unwrap();
                     (
                         country.iso_code.unwrap().to_string(),
                         country.names.unwrap().get("en").unwrap().to_string(),
                     )
-                },
+                }
             };
 
             // <Result>.subdivisions -> (String, String)
             let subdivisions = match result.subdivisions {
-                None => (
-                    String::from("-"),
-                    String::from("-"),
-                ),
+                None => (String::from("-"), String::from("-")),
                 _ => {
                     let subdivisions = result.subdivisions.unwrap();
                     (
                         subdivisions[0].iso_code.unwrap().to_string(),
-                        subdivisions[0].names.as_ref().unwrap().get("en").unwrap().to_string(),
+                        subdivisions[0]
+                            .names
+                            .as_ref()
+                            .unwrap()
+                            .get("en")
+                            .unwrap()
+                            .to_string(),
                     )
-                },
+                }
             };
 
             // These fields exist in the data but are not used here
@@ -195,12 +173,12 @@ fn lookup_city(
             // <Result>.traits
 
             LookupCityResult {
-                city: city,
-                continent: continent,
-                country: country,
-                subdivisions: subdivisions,
+                city,
+                continent,
+                country,
+                subdivisions,
             }
-        },
+        }
         Err(error) => {
             if debug {
                 println!("lookup_city(addr: {addr:#?}) error: {error:#?}");
@@ -209,31 +187,29 @@ fn lookup_city(
                 //TODO:
             }
             city_result_default
-        },
+        }
     };
 
     // Return the result
-    return city_result;
+    city_result
 }
 
-
-/// Return a Lookup summary structure 
+/// Return a Lookup summary structure
 fn get_summary(asn: &LookupAsnResult, city: &LookupCityResult) -> String {
     // "<CITY>,<STATE>/<COUNTRY>; <AS NAME> (<ASN>);"
     let mut summary = String::new();
     summary.push_str(&city.city);
-    summary.push_str(",");
+    summary.push(',');
     summary.push_str(&city.subdivisions.0);
-    summary.push_str("/");
+    summary.push('/');
     summary.push_str(&city.country.0);
     summary.push_str("; ");
     summary.push_str(&asn.asn_organization);
     summary.push_str(" (");
     summary.push_str(&asn.asn.to_string());
     summary.push_str(");");
-    return summary;
+    summary
 }
-
 
 /// LookupResult structure
 #[derive(Serialize)]
@@ -248,62 +224,46 @@ struct LookupResult {
     summary: String,
 }
 
-
 /// RequestPath structure
 #[derive(Debug, Deserialize)]
 struct RequestPath {
     address: String,
 }
 
-
 /// Return a LookupResult in JSON format for an IP address
 #[get("/address/{address}")]
-async fn address(
-    data: web::Data<AppData>,
-    path: web::Path<RequestPath>,
-) -> Result<impl Responder> {
+async fn address(data: web::Data<AppData>, path: web::Path<RequestPath>) -> Result<impl Responder> {
     // Convert the address String into an IpAddr
     // TODO: Conversion error handling -> 400 Client Error
     let address = path.address.parse::<IpAddr>().unwrap();
 
     // Lookup the ASN information for the IP address
     let asn_database_file = &data.asn_database_file;
-    let asn_result = lookup_asn(
-        asn_database_file,
-        address,
-        data.debug,
-        data.verbose,
-    );
+    let asn_result = lookup_asn(asn_database_file, address, data.debug, data.verbose);
 
     // Lookup the City information for the IP address
     let city_database_file = &data.city_database_file;
-    let city_result = lookup_city(
-        city_database_file,
-        address,
-        data.debug,
-        data.verbose,
-    );
+    let city_result = lookup_city(city_database_file, address, data.debug, data.verbose);
 
     // Get a summary of the information
     let summary = get_summary(&asn_result, &city_result);
 
     // ...
     let result = LookupResult {
-        address: address,
+        address,
         asn: asn_result.asn,
         asn_organization: asn_result.asn_organization,
         city: city_result.city,
         continent: city_result.continent,
         country: city_result.country,
         subdivisions: city_result.subdivisions,
-        summary: summary,
+        summary,
     };
 
     // Format the result into JSON
     // https://docs.rs/actix-web/latest/actix_web/web/struct.Json.html
     Ok(web::Json(result))
 }
-
 
 /// Return a LookupResult in JSON format for the requesting client's IP address
 #[get("/address/")]
@@ -353,28 +313,23 @@ async fn default() -> Result<impl Responder> {
     Ok("not implement yet\n")
 }
 
-
 // Pong response structure
 #[derive(Debug, Deserialize, Serialize)]
 struct PongResponse {
     ping: String,
 }
 
-
 // Ping/Pong response handler
 #[get("/ping")]
 async fn ping() -> Result<impl Responder> {
     // Respond with a pong response as a sanity check
     let pong = "pong".to_string();
-    let result = PongResponse {
-        ping: pong,
-    };
+    let result = PongResponse { ping: pong };
 
     // Format the result into JSON
     // https://docs.rs/actix-web/latest/actix_web/web/struct.Json.html
     Ok(web::Json(result))
 }
-
 
 // ...
 struct AppData {
@@ -384,11 +339,9 @@ struct AppData {
     city_database_file: String,
 }
 
-
 // ...
 #[actix_web::main]
 async fn actix_main(args: Args) -> std::io::Result<()> {
-
     // Configure the log level based on the cli arguments
     // NOTE: Access logs are printed with the INFO level
     // https://docs.rs/actix-web/latest/actix_web/middleware/struct.Logger.html
@@ -399,10 +352,7 @@ async fn actix_main(args: Args) -> std::io::Result<()> {
     } else {
         "warn"
     };
-    env_logger::init_from_env(
-        env_logger::Env::new()
-            .default_filter_or(log_level)
-    );
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or(log_level));
 
     // Configure the log format
     let log_format = "%a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T";
@@ -429,7 +379,6 @@ async fn actix_main(args: Args) -> std::io::Result<()> {
     .run()
     .await
 }
-
 
 // Configure command-line options
 #[derive(Parser, Debug)]
