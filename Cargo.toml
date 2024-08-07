@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.8.0"
+chrono = "0.4.38"
 clap = { version = "4.5.13", features = ["derive"] }
 env_logger = "0.11.5"
 log = "0.4.22"
