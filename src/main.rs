@@ -10,6 +10,11 @@ use actix_web::{get, middleware::Logger, web, App, HttpServer, Responder, Result
 // cargo add clap --features derive
 use clap::Parser;
 
+// Timezone-aware date and time
+// https://docs.rs/chrono/latest/chrono/
+// cargo add chrono
+use chrono::{DateTime, Utc};
+
 // A simple logger
 // https://docs.rs/actix-web/latest/actix_web/middleware/struct.Logger.html
 // https://docs.rs/env_logger/latest/env_logger/
@@ -20,7 +25,7 @@ use clap::Parser;
 use serde::{Deserialize, Serialize};
 
 // IP information lookup
-use actix_geo_widget::lookup;
+use actix_geo_widget::{lookup, lookup_metadata};
 
 /// RequestPath structure
 #[derive(Debug, Deserialize)]
@@ -99,6 +104,46 @@ async fn default() -> Result<impl Responder> {
     Ok("not implement yet\n")
 }
 
+/// Healthcheck response handler
+#[get("/healthcheck")]
+async fn healthcheck(data: web::Data<AppData>) -> Result<impl Responder> {
+    // TODO: return the date of the databases as a sanity check for read capability and to provide information about the running database version
+
+    let asn_database_file = &data.asn_database_file;
+    let asn_metadata = lookup_metadata(
+        asn_database_file, // --asn-database-file
+    );
+
+    let city_database_file = &data.city_database_file;
+    let city_metadata = lookup_metadata(
+        city_database_file, // --city-database-file
+    );
+
+    /*
+    Example City Metadata result
+    city_metadata: Metadata {
+        binary_format_major_version: 2,
+        binary_format_minor_version: 0,
+        build_epoch: 1722343686,
+        database_type: "GeoLite2-City",
+        description: {
+            "en": "GeoLite2City database"
+        },
+        ip_version: 6,
+        languages: ["de", "en", "es", "fr", "ja", "pt-BR", "ru", "zh-CN"],
+        node_count: 3897787,
+        record_size: 28
+    }
+    */
+
+    if data.debug {
+        println!("asn_metadata: {:?}", asn_metadata);
+        println!("city_metadata: {:?}", city_metadata);
+    }
+
+    Ok("not implement yet\n")
+}
+
 // Pong response structure
 #[derive(Debug, Deserialize, Serialize)]
 struct PongResponse {
@@ -166,6 +211,47 @@ async fn actix_main(args: Args) -> std::io::Result<()> {
     .await
 }
 
+/// Print database metadata information
+fn print_database_metadata(database_file: &String, debug: bool, verbose: bool) {
+    // Lookup metadata from the database file
+    let database_metadata = lookup_metadata(database_file);
+    /*
+    Example City Metadata result
+    city_metadata: Metadata {
+        binary_format_major_version: 2,
+        binary_format_minor_version: 0,
+        build_epoch: 1722343686,
+        database_type: "GeoLite2-City",
+        description: {
+            "en": "GeoLite2City database"
+        },
+        ip_version: 6,
+        languages: ["de", "en", "es", "fr", "ja", "pt-BR", "ru", "zh-CN"],
+        node_count: 3897787,
+        record_size: 28
+    }
+    */
+    if debug {
+        println!("database_metadata: {:?}", database_metadata);
+    }
+    if debug || verbose {
+        // Convert the epoch unix timestamp to RFC 8901 format
+        let build_datetime: DateTime<Utc> =
+            DateTime::from_timestamp(database_metadata.build_epoch as i64, 0).unwrap();
+
+        // Print database metadata information
+        println!(
+            "Using {} (v{}.{}) build on: {:?}, node count: {}, record size: {}",
+            database_metadata.database_type,
+            database_metadata.binary_format_major_version,
+            database_metadata.binary_format_minor_version,
+            build_datetime,
+            database_metadata.node_count,
+            database_metadata.record_size,
+        );
+    }
+}
+
 // Configure command-line options
 #[derive(Parser, Debug)]
 #[command(
@@ -190,6 +276,10 @@ struct Args {
     #[arg(long, default_value = "GeoLite2-City.mmdb")]
     city_database_file: String,
 
+    /// Print database metadate information
+    #[arg(long)]
+    metadata: bool,
+
     /// Offline mode (IP address to lookup taken from -a/--addr)
     #[arg(short, long)]
     offline: bool,
@@ -206,6 +296,17 @@ struct Args {
 // CLI configuration options using clap
 fn main() {
     let args = Args::parse();
+
+    // Print database metadata information
+    if args.metadata {
+        // Print ASN database metadata information
+        let asn_database_file = &args.asn_database_file;
+        print_database_metadata(asn_database_file, args.debug, args.verbose);
+
+        // Print City database metadata information
+        let city_database_file = &args.city_database_file;
+        print_database_metadata(city_database_file, args.debug, args.verbose);
+    }
 
     // Lookup the IP address information
     if args.offline {
