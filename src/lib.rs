@@ -4,11 +4,23 @@ use std::net::IpAddr;
 // https://docs.rs/maxminddb/latest/maxminddb/
 // http://oschwald.github.io/maxminddb-rust/maxminddb/struct.Reader.html
 // cargo add maxminddb
-use maxminddb::{geoip2, MaxMindDBError, Reader};
+use maxminddb::{geoip2, MaxMindDBError, Metadata, Reader};
 
 // https://docs.rs/serde/latest/serde/
 // https://serde.rs
 use serde::{Deserialize, Serialize};
+
+// Return Metadata about the database
+pub fn lookup_metadata(database_file: &String) -> Metadata {
+    // Create a handle to the GeoLite2-*.mmdb
+    // https://oschwald.github.io/maxminddb-rust/maxminddb/struct.Metadata.html
+    let reader = Reader::open_readfile(database_file).unwrap();
+
+    // Return the reader metadata
+    reader.metadata
+}
+
+/// LookupCountryResult structure
 
 // LookupAsnResult structure
 #[derive(Clone, Debug, Deserialize)]
@@ -33,10 +45,10 @@ pub fn lookup_asn(
     // Create a handle to the GeoLite2-ASN.mmdb
     // http://oschwald.github.io/maxminddb-rust/maxminddb/geoip2/index.html
     // http://oschwald.github.io/maxminddb-rust/maxminddb/geoip2/struct.Asn.html
-    let geo_lite2_asn_reader = Reader::open_readfile(asn_database_file).unwrap();
+    let reader = Reader::open_readfile(asn_database_file).unwrap();
 
     // Lookup the ASN information for the IP address
-    let asn_lookup_result: Result<geoip2::Asn, MaxMindDBError> = geo_lite2_asn_reader.lookup(addr);
+    let asn_lookup_result: Result<geoip2::Asn, MaxMindDBError> = reader.lookup(addr);
 
     // Handle lookup errors gracefully
     // Unwrap a result or use the default value
