@@ -57,7 +57,7 @@ async fn address(data: web::Data<AppData>, path: web::Path<RequestPath>) -> Resu
 }
 
 /// Return a LookupResult in JSON format for the requesting client's IP address
-#[get("/address/")]
+#[get("/address")]
 async fn default() -> Result<impl Responder> {
     // Check "Forwarded" HTTP request header for a "for=<ADDRESS>"
 
@@ -104,16 +104,27 @@ async fn default() -> Result<impl Responder> {
     Ok("not implement yet\n")
 }
 
+// Healthcheck response structure
+#[derive(Debug, Deserialize, Serialize)]
+struct HealthcheckResponse {
+    is_healthly: bool,
+    reason: String,
+}
+
 /// Healthcheck response handler
 #[get("/healthcheck")]
 async fn healthcheck(data: web::Data<AppData>) -> Result<impl Responder> {
-    // TODO: return the date of the databases as a sanity check for read capability and to provide information about the running database version
+    // `maximum_stale_ttl` is the maximum number of seconds a database
+    // should be used for before being replaced with an updated release.
+    let maximum_stale_ttl = (604800 * 2) + 86400; // 2 weeks + 1 day
 
+    // Lookup metadata for the ASN database
     let asn_database_file = &data.asn_database_file;
     let asn_metadata = lookup_metadata(
         asn_database_file, // --asn-database-file
     );
 
+    // Lookup metadata for the ASN database
     let city_database_file = &data.city_database_file;
     let city_metadata = lookup_metadata(
         city_database_file, // --city-database-file
@@ -136,12 +147,56 @@ async fn healthcheck(data: web::Data<AppData>) -> Result<impl Responder> {
     }
     */
 
-    if data.debug {
-        println!("asn_metadata: {:?}", asn_metadata);
-        println!("city_metadata: {:?}", city_metadata);
+    // Default result values
+    let mut is_healthly = true;
+    let mut reason = String::from("Check of databases passed");
+
+    // Check the database metadata
+    let databases = [asn_metadata, city_metadata];
+    for database in databases.iter() {
+        // The build_epoch should reflect a recent version of the database to be considered healthy
+        let build_datetime: DateTime<Utc> =
+            DateTime::from_timestamp(database.build_epoch as i64, 0).unwrap();
+        let database_age = (Utc::now() - build_datetime).num_seconds();
+
+        // Debug messages
+        if data.debug {
+            println!(
+                "Database {} metadata: {:?}",
+                database.database_type, database,
+            );
+            println!(
+                "Database {} age: {:?}",
+                database.database_type, database_age,
+            );
+        }
+
+        // Check the if the `database_age` has exceeded the `maximum_stale_ttl`
+        if database_age >= maximum_stale_ttl {
+            is_healthly = false;
+            reason = format!(
+                "Database is stale ({} build date: {})",
+                database.database_type, build_datetime,
+            );
+            break;
+        // Debug messages
+        } else if data.debug {
+            println!(
+                "Database is fresh ({} build date: {})",
+                database.database_type, build_datetime,
+            );
+        }
     }
 
-    Ok("not implement yet\n")
+    // Set the result information
+    let result = HealthcheckResponse {
+        is_healthly,
+        reason,
+    };
+
+    // Format the result into JSON
+    // https://docs.rs/actix-web/latest/actix_web/web/struct.Json.html
+    Ok(web::Json(result))
 }
 
 // Pong response structure
@@ -154,15 +209,16 @@ struct PongResponse {
 #[get("/ping")]
 async fn ping() -> Result<impl Responder> {
     // Respond with a pong response as a sanity check
-    let pong = "pong".to_string();
-    let result = PongResponse { ping: pong };
+    let result = PongResponse {
+        ping: String::from("pong"),
+    };
 
     // Format the result into JSON
     // https://docs.rs/actix-web/latest/actix_web/web/struct.Json.html
     Ok(web::Json(result))
 }
 
-// ...
+// Application data passed to endpoints
 struct AppData {
     debug: bool,
     verbose: bool,
@@ -170,7 +226,7 @@ struct AppData {
     city_database_file: String,
 }
 
-// ...
+// Main Actix Web service
 #[actix_web::main]
 async fn actix_main(args: Args) -> std::io::Result<()> {
     // Configure the log level based on the cli arguments
@@ -204,6 +260,7 @@ async fn actix_main(args: Args) -> std::io::Result<()> {
             }))
             .service(address)
             .service(default)
+            .service(healthcheck)
             .service(ping)
     })
     .bind(("0.0.0.0", args.port))?
