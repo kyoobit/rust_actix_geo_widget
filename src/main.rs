@@ -106,12 +106,12 @@ async fn default() -> Result<impl Responder> {
 
 // Healthcheck response structure
 #[derive(Debug, Deserialize, Serialize)]
-struct HealthcheckResponse {
-    is_healthly: bool,
+struct HealthCheckResponse {
+    is_healthy: bool,
     reason: String,
 }
 
-/// Healthcheck response handler
+/// Health check response handler
 #[get("/healthcheck")]
 async fn healthcheck(data: web::Data<AppData>) -> Result<impl Responder> {
     // `maximum_stale_ttl` is the maximum number of seconds a database
@@ -148,7 +148,7 @@ async fn healthcheck(data: web::Data<AppData>) -> Result<impl Responder> {
     */
 
     // Default result values
-    let mut is_healthly = true;
+    let mut is_healthy = true;
     let mut reason = String::from("Check of databases passed");
 
     // Check the database metadata
@@ -173,7 +173,7 @@ async fn healthcheck(data: web::Data<AppData>) -> Result<impl Responder> {
 
         // Check the if the `database_age` has exceeded the `maximum_stale_ttl`
         if database_age >= maximum_stale_ttl {
-            is_healthly = false;
+            is_healthy = false;
             reason = format!(
                 "Database is stale ({} build date: {})",
                 database.database_type, build_datetime,
@@ -189,10 +189,7 @@ async fn healthcheck(data: web::Data<AppData>) -> Result<impl Responder> {
     }
 
     // Set the result information
-    let result = HealthcheckResponse {
-        is_healthly,
-        reason,
-    };
+    let result = HealthCheckResponse { is_healthy, reason };
 
     // Format the result into JSON
     // https://docs.rs/actix-web/latest/actix_web/web/struct.Json.html
