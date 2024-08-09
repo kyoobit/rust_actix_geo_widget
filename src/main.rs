@@ -3,7 +3,9 @@ use std::net::IpAddr;
 // A web framework for Rust
 // https://docs.rs/actix-web/latest/actix_web/web/index.html
 // cargo add actix-web
-use actix_web::{get, middleware::Logger, web, App, HttpServer, Responder, Result};
+use actix_web::{
+    dev::ConnectionInfo, get, middleware::Logger, web, App, HttpServer, Responder, Result,
+};
 
 // Command Line Argument Parser for Rust
 // https://docs.rs/clap/latest/clap/
@@ -35,7 +37,10 @@ struct RequestPath {
 
 /// Return a LookupResult in JSON format for an IP address
 #[get("/address/{address}")]
-async fn address(data: web::Data<AppData>, path: web::Path<RequestPath>) -> Result<impl Responder> {
+async fn specific_address(
+    data: web::Data<AppData>,
+    path: web::Path<RequestPath>,
+) -> Result<impl Responder> {
     // Convert the address String into an IpAddr
     // TODO: Conversion error handling -> 400 Client Error
     let address = path.address.parse::<IpAddr>().unwrap();
@@ -58,50 +63,33 @@ async fn address(data: web::Data<AppData>, path: web::Path<RequestPath>) -> Resu
 
 /// Return a LookupResult in JSON format for the requesting client's IP address
 #[get("/address")]
-async fn default() -> Result<impl Responder> {
-    // Check "Forwarded" HTTP request header for a "for=<ADDRESS>"
+async fn client_address(data: web::Data<AppData>, conn: ConnectionInfo) -> Result<impl Responder> {
+    // Get the client's "real" IP address (which may be spoofed)
+    // https://github.com/actix/actix-web/blob/master/actix-web/src/info.rs#L158
+    // The address is resolved through the following, in order:
+    // - `Forwarded` header
+    // - `X-Forwarded-For` header
+    // - peer address of opened socket (same as [`remote_addr`](Self::remote_addr))
+    let realip_remote_addr = conn.realip_remote_addr().unwrap().to_string();
 
-    // Check "X-Forwarded-For" HTTP request header
-    // Ass-u-me the first public address is the header value is the client's
-
-    // Default to the address used to make the request (sans proxy)
-
-    // https://docs.rs/actix-web/latest/actix_web/web/struct.Header.html
-
-    /*
     // Convert the address String into an IpAddr
     // TODO: Conversion error handling -> 400 Client Error
-    let address = path.address.parse::<IpAddr>().unwrap();
+    let address = realip_remote_addr.parse::<IpAddr>().unwrap();
 
-    // Lookup the ASN information for the IP address
-    let asn_result = lookup_asn(address);
+    // Lookup the information for the IP address
+    let asn_database_file = &data.asn_database_file;
+    let city_database_file = &data.city_database_file;
+    let result = lookup(
+        asn_database_file,  // --asn-database-file
+        city_database_file, // --city-database-file
+        address,
+        data.debug,   // --debug
+        data.verbose, // --verbose
+    );
 
-    // Lookup the City information for the IP address
-    let city_result = lookup_city(address);
-
-    // Get a summary of the information
-    let summary = get_summary(&asn_result, &city_result);
-
-    // ...
-    let result = LookupResult {
-        address: address,
-        asn: asn_result.asn,
-        asn_organization: asn_result.asn_organization,
-        city: city_result.city,
-        continent: city_result.continent,
-        country: city_result.country,
-        subdivisions: city_result.subdivisions,
-        summary: summary,
-    };
-    */
-
-    /*
     // Format the result into JSON
     // https://docs.rs/actix-web/latest/actix_web/web/struct.Json.html
     Ok(web::Json(result))
-    */
-
-    Ok("not implement yet\n")
 }
 
 // Healthcheck response structure
@@ -255,8 +243,8 @@ async fn actix_main(args: Args) -> std::io::Result<()> {
                 asn_database_file: asn_database_file.clone(),
                 city_database_file: city_database_file.clone(),
             }))
-            .service(address)
-            .service(default)
+            .service(specific_address)
+            .service(client_address)
             .service(healthcheck)
             .service(ping)
     })
@@ -375,5 +363,74 @@ fn main() {
     // Start the web service
     } else {
         let _ = actix_main(args);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_geo_widget::LookupResult;
+    use actix_web::test;
+
+    #[actix_web::test]
+    async fn test_client_address_forwarded() {
+        // Initialize the application
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(AppData {
+                    debug: false,
+                    verbose: false,
+                    asn_database_file: String::from("GeoLite2-ASN.mmdb"),
+                    city_database_file: String::from("GeoLite2-City.mmdb"),
+                }))
+                .service(client_address),
+        )
+        .await;
+
+        // Send a request to the `client_address` endpoint
+        let req = test::TestRequest::get()
+            .uri("/address")
+            .insert_header(("Forwarded", "for=4.3.2.1"))
+            .to_request();
+
+        // Send the request and parse the response as JSON
+        let result: LookupResult = test::call_and_read_body_json(&app, req).await;
+
+        // Assert the response
+        assert_eq!(
+            result.address,
+            String::from("4.3.2.1").parse::<IpAddr>().unwrap()
+        );
+    }
+
+    #[actix_web::test]
+    async fn test_client_address_x_forwarded_for() {
+        // Initialize the application
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(AppData {
+                    debug: false,
+                    verbose: false,
+                    asn_database_file: String::from("GeoLite2-ASN.mmdb"),
+                    city_database_file: String::from("GeoLite2-City.mmdb"),
+                }))
+                .service(client_address),
+        )
+        .await;
+
+        // Send a request to the `client_address` endpoint
+        let req = test::TestRequest::get()
+            .uri("/address")
+            .insert_header(("X-Forwarded-For", "4.3.2.1"))
+            .to_request();
+
+        // Send the request and parse the response as JSON
+        let result: LookupResult = test::call_and_read_body_json(&app, req).await;
+
+        // Assert the response
+        assert_eq!(
+            result.address,
+            String::from("4.3.2.1").parse::<IpAddr>().unwrap()
+        );
     }
 }
