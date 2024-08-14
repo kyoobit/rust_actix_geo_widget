@@ -433,4 +433,64 @@ mod tests {
             String::from("4.3.2.1").parse::<IpAddr>().unwrap()
         );
     }
+
+    #[actix_web::test]
+    async fn test_specific_address_ipv4() {
+        // Initialize the application
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(AppData {
+                    debug: false,
+                    verbose: false,
+                    asn_database_file: String::from("GeoLite2-ASN.mmdb"),
+                    city_database_file: String::from("GeoLite2-City.mmdb"),
+                }))
+                .service(specific_address),
+        )
+        .await;
+
+        // Send a request to the `client_address` endpoint
+        let req = test::TestRequest::get()
+            .uri("/address/4.3.2.1")
+            .to_request();
+
+        // Send the request and parse the response as JSON
+        let result: LookupResult = test::call_and_read_body_json(&app, req).await;
+
+        // Assert the response
+        assert_eq!(
+            result.address,
+            String::from("4.3.2.1").parse::<IpAddr>().unwrap()
+        );
+    }
+
+    #[actix_web::test]
+    async fn test_specific_address_ipv6() {
+        // Initialize the application
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(AppData {
+                    debug: false,
+                    verbose: false,
+                    asn_database_file: String::from("GeoLite2-ASN.mmdb"),
+                    city_database_file: String::from("GeoLite2-City.mmdb"),
+                }))
+                .service(specific_address),
+        )
+        .await;
+
+        // Send a request to the `client_address` endpoint
+        let req = test::TestRequest::get()
+            .uri("/address/2600::1")
+            .to_request();
+
+        // Send the request and parse the response as JSON
+        let result: LookupResult = test::call_and_read_body_json(&app, req).await;
+
+        // Assert the response
+        assert_eq!(
+            result.address,
+            String::from("2600::1").parse::<IpAddr>().unwrap()
+        );
+    }
 }
