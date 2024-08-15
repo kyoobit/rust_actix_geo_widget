@@ -7,17 +7,23 @@ use actix_web::{
     dev::ConnectionInfo, get, middleware::Logger, web, App, HttpServer, Responder, Result,
 };
 
-// Command Line Argument Parser for Rust
-// https://docs.rs/clap/latest/clap/
-// cargo add clap --features derive
-use clap::Parser;
+// A Prometheus instrumentation middleware for use with actix-web
+// https://docs.rs/actix-web-prom/latest/actix_web_prom/
+// cargo add actix-web-prom
+use actix_web_prom::PrometheusMetricsBuilder;
 
 // Timezone-aware date and time
 // https://docs.rs/chrono/latest/chrono/
 // cargo add chrono
 use chrono::{DateTime, Utc};
 
+// Command Line Argument Parser for Rust
+// https://docs.rs/clap/latest/clap/
+// cargo add clap --features derive
+use clap::Parser;
+
 // A simple logger
+// https://docs.rs/log/latest/log/
 // https://docs.rs/actix-web/latest/actix_web/middleware/struct.Logger.html
 // https://docs.rs/env_logger/latest/env_logger/
 // cargo add env_logger
@@ -25,6 +31,15 @@ use chrono::{DateTime, Utc};
 // https://docs.rs/serde/latest/serde/
 // https://serde.rs
 use serde::{Deserialize, Serialize};
+
+// A framework for instrumenting Rust
+// https://docs.rs/tracing/latest/tracing
+// cargo add tracing
+// Utilities for implementing and composing tracing subscribers
+// https://docs.rs/tracing-subscriber/latest/tracing_subscriber
+// cargo add tracing-subscriber
+use tracing::{debug, info, Level};
+use tracing_subscriber::FmtSubscriber;
 
 // IP information lookup
 use actix_geo_widget::{lookup, lookup_metadata};
@@ -214,7 +229,23 @@ struct AppData {
 // Main Actix Web service
 #[actix_web::main]
 async fn actix_main(args: Args) -> std::io::Result<()> {
-    // Configure the log level based on the cli arguments
+    // Initialize tracing logging using the args.<debug|verbose|...> specified
+    let tracing_log_level = if args.debug {
+        Level::DEBUG
+    } else if args.verbose {
+        Level::INFO
+    } else {
+        Level::WARN
+    };
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(tracing_log_level) // really the minimum log level
+        //.with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339())
+        .with_writer(std::io::stderr)
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
+    // Configure the Web access log level based on the cli arguments
     // NOTE: Access logs are printed with the INFO level
     // https://docs.rs/actix-web/latest/actix_web/middleware/struct.Logger.html
     let log_level = if args.debug {
@@ -224,19 +255,28 @@ async fn actix_main(args: Args) -> std::io::Result<()> {
     } else {
         "warn"
     };
+    debug!(log_level = %log_level);
     env_logger::init_from_env(env_logger::Env::new().default_filter_or(log_level));
-
     // Configure the log format
-    let log_format = "%a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T";
+    //let log_format = "%a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T";
 
     // Bring information from `args` into scope
     let asn_database_file = args.asn_database_file;
     let city_database_file = args.city_database_file;
 
-    // ...
+    // Prometheus middleware
+    let prometheus = PrometheusMetricsBuilder::new("actix_geo_widget")
+        .endpoint("/metrics")
+        .build()
+        .unwrap();
+
+    info!("Starting actix-geo-widget");
+
+    // Initialize the HTTP server with the application
     HttpServer::new(move || {
         App::new()
-            .wrap(Logger::new(log_format))
+            .wrap(Logger::default())
+            .wrap(prometheus.clone())
             .app_data(web::Data::new(AppData {
                 debug: args.debug,
                 verbose: args.verbose,
