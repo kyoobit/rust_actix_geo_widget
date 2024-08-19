@@ -1,7 +1,7 @@
 FROM docker.io/library/rust:alpine AS builder
 
 ## Add os build dependencies
-RUN apk add --no-cache musl-dev=1.2.4_git20230717-r4
+RUN apk add --no-cache musl-dev=musl-dev-1.2.5-r0
 
 ## Copy the source files for the project
 WORKDIR /actix-geo-widget
@@ -12,7 +12,7 @@ COPY ./src ./src
 RUN cargo build --release
 
 ## Use a smaller base image for a smaller final image
-FROM docker.io/library/alpine:3.20 AS final
+FROM docker.io/library/alpine:3 AS final
 
 ## Copy the binary from the builder 
 COPY --from=builder /actix-geo-widget/target/release/actix-geo-widget \
