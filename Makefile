@@ -20,11 +20,11 @@ update: ## update rust and dependencies to the latest version
 
 format: ## format the project using cargo
 	@rustup component add rustfmt 2> /dev/null
-	cargo fmt
+	cargo fmt --verbose --check
 
 lint: ## Lint the project using cargo
 	@rustup component add clippy 2> /dev/null
-	cargo clippy
+	cargo clippy --all -- --warn warnings
 
 test: ## Test the project using cargo
 	cargo test
