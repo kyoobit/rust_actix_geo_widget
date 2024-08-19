@@ -20,5 +20,11 @@ jobs:
     - uses: actions/checkout@v4
     - name: Build
       run: cargo build --verbose
+
+    - name: Get maxmind database
+      env:
+        MAXMIND_API_KEY: ${{ secrets.MAXMIND_API_KEY }}
+      run: bash get_maxmind_database.sh -u -e GeoLite2-ASN,GeoLite2-City -k "${MAXMIND_API_KEY}"
+
     - name: Run tests
       run: cargo test --verbose
