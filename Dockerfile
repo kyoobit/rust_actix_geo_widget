@@ -1,7 +1,7 @@
 FROM docker.io/library/rust:alpine AS builder
 
 ## Add os build dependencies
-RUN apk add --no-cache musl-dev>=musl-dev-1.2.5
+RUN apk add --no-cache musl-dev=1.2.5-r0
 
 ## Copy the source files for the project
 WORKDIR /actix-geo-widget
