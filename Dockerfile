@@ -15,7 +15,7 @@ RUN cargo build --release
 ## https://github.com/GoogleContainerTools/distroless
 ## https://github.com/GoogleContainerTools/distroless/blob/main/cc/README.md
 ## https://github.com/GoogleContainerTools/distroless/blob/main/examples/rust/Dockerfile
-FROM gcr.io/distroless/cc-debian12:latest AS final
+FROM gcr.io/distroless/cc-debian12:nonroot AS final
 
 ## Copy the compiled application binary from the builder
 COPY --from=builder /actix-geo-widget/target/release/actix-geo-widget \
