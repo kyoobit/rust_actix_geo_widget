@@ -3,9 +3,7 @@ use std::net::IpAddr;
 // A web framework for Rust
 // https://docs.rs/actix-web/latest/actix_web/web/index.html
 // cargo add actix-web
-use actix_web::{
-    dev::ConnectionInfo, get, middleware::Logger, web, App, HttpServer, Responder, Result,
-};
+use actix_web::{dev::ConnectionInfo, get, middleware::Logger, web, App, HttpResponse, HttpServer};
 
 // A Prometheus instrumentation middleware for use with actix-web
 // https://docs.rs/actix-web-prom/latest/actix_web_prom/
@@ -28,9 +26,14 @@ use clap::Parser;
 // https://docs.rs/env_logger/latest/env_logger/
 // cargo add env_logger
 
+// A framework for serializing and deserializing Rust data structures
 // https://docs.rs/serde/latest/serde/
 // https://serde.rs
+// cargo add serde --features derive
 use serde::{Deserialize, Serialize};
+// https://docs.rs/serde_json/latest/serde_json/
+// cargo add serde_json
+use serde_json::json;
 
 // A framework for instrumenting Rust
 // https://docs.rs/tracing/latest/tracing
@@ -50,12 +53,19 @@ struct RequestPath {
     address: String,
 }
 
+/// RequestQuery structure
+#[derive(Debug, Deserialize)]
+struct RequestQuery {
+    compact: Option<String>,
+}
+
 /// Return a LookupResult in JSON format for an IP address
 #[get("/address/{address}")]
 async fn specific_address(
     data: web::Data<AppData>,
     path: web::Path<RequestPath>,
-) -> Result<impl Responder> {
+    query: web::Query<RequestQuery>,
+) -> HttpResponse {
     // Convert the address String into an IpAddr
     // TODO: Conversion error handling -> 400 Client Error
     let address = path.address.parse::<IpAddr>().unwrap();
@@ -72,13 +82,29 @@ async fn specific_address(
     );
 
     // Format the result into JSON
-    // https://docs.rs/actix-web/latest/actix_web/web/struct.Json.html
-    Ok(web::Json(result))
+    // https://docs.rs/serde_json/latest/serde_json/macro.json.html
+    let result_as_json = json!(result);
+
+    // If the request's query string contains "compact", return the result as compact JSON
+    // https://docs.rs/actix-web/latest/actix_web/web/struct.Query.html
+    if query.compact.is_some() {
+        HttpResponse::Ok()
+            .insert_header(("Content-Type", "application/json"))
+            .body(serde_json::to_string(&result_as_json).unwrap())
+    } else {
+        HttpResponse::Ok()
+            .insert_header(("Content-Type", "application/json"))
+            .body(serde_json::to_string_pretty(&result_as_json).unwrap())
+    }
 }
 
 /// Return a LookupResult in JSON format for the requesting client's IP address
 #[get("/address")]
-async fn client_address(data: web::Data<AppData>, conn: ConnectionInfo) -> Result<impl Responder> {
+async fn client_address(
+    conn: ConnectionInfo,
+    data: web::Data<AppData>,
+    query: web::Query<RequestQuery>,
+) -> HttpResponse {
     // Get the client's "real" IP address (which may be spoofed)
     // https://github.com/actix/actix-web/blob/master/actix-web/src/info.rs#L158
     // The address is resolved through the following, in order:
@@ -103,8 +129,20 @@ async fn client_address(data: web::Data<AppData>, conn: ConnectionInfo) -> Resul
     );
 
     // Format the result into JSON
-    // https://docs.rs/actix-web/latest/actix_web/web/struct.Json.html
-    Ok(web::Json(result))
+    // https://docs.rs/serde_json/latest/serde_json/macro.json.html
+    let result_as_json = json!(result);
+
+    // If the request's query string contains "compact", return the result as compact JSON
+    // https://docs.rs/actix-web/latest/actix_web/web/struct.Query.html
+    if query.compact.is_some() {
+        HttpResponse::Ok()
+            .insert_header(("Content-Type", "application/json"))
+            .body(serde_json::to_string(&result_as_json).unwrap())
+    } else {
+        HttpResponse::Ok()
+            .insert_header(("Content-Type", "application/json"))
+            .body(serde_json::to_string_pretty(&result_as_json).unwrap())
+    }
 }
 
 // Healthcheck response structure
@@ -116,7 +154,7 @@ struct HealthCheckResponse {
 
 /// Health check response handler
 #[get("/healthcheck")]
-async fn healthcheck(data: web::Data<AppData>) -> Result<impl Responder> {
+async fn healthcheck(data: web::Data<AppData>, query: web::Query<RequestQuery>) -> HttpResponse {
     // `maximum_stale_ttl` is the maximum number of seconds a database
     // should be used for before being replaced with an updated release.
     let maximum_stale_ttl = (604800 * 2) + 86400; // 2 weeks + 1 day
@@ -195,8 +233,20 @@ async fn healthcheck(data: web::Data<AppData>) -> Result<impl Responder> {
     let result = HealthCheckResponse { is_healthy, reason };
 
     // Format the result into JSON
-    // https://docs.rs/actix-web/latest/actix_web/web/struct.Json.html
-    Ok(web::Json(result))
+    // https://docs.rs/serde_json/latest/serde_json/macro.json.html
+    let result_as_json = json!(result);
+
+    // If the request's query string contains "compact", return the result as compact JSON
+    // https://docs.rs/actix-web/latest/actix_web/web/struct.Query.html
+    if query.compact.is_some() {
+        HttpResponse::Ok()
+            .insert_header(("Content-Type", "application/json"))
+            .body(serde_json::to_string(&result_as_json).unwrap())
+    } else {
+        HttpResponse::Ok()
+            .insert_header(("Content-Type", "application/json"))
+            .body(serde_json::to_string_pretty(&result_as_json).unwrap())
+    }
 }
 
 // Pong response structure
@@ -207,15 +257,27 @@ struct PongResponse {
 
 // Ping/Pong response handler
 #[get("/ping")]
-async fn ping() -> Result<impl Responder> {
+async fn ping(query: web::Query<RequestQuery>) -> HttpResponse {
     // Respond with a pong response as a sanity check
     let result = PongResponse {
         ping: String::from("pong"),
     };
 
     // Format the result into JSON
-    // https://docs.rs/actix-web/latest/actix_web/web/struct.Json.html
-    Ok(web::Json(result))
+    // https://docs.rs/serde_json/latest/serde_json/macro.json.html
+    let result_as_json = json!(result);
+
+    // If the request's query string contains "compact", return the result as compact JSON
+    // https://docs.rs/actix-web/latest/actix_web/web/struct.Query.html
+    if query.compact.is_some() {
+        HttpResponse::Ok()
+            .insert_header(("Content-Type", "application/json"))
+            .body(serde_json::to_string(&result_as_json).unwrap())
+    } else {
+        HttpResponse::Ok()
+            .insert_header(("Content-Type", "application/json"))
+            .body(serde_json::to_string_pretty(&result_as_json).unwrap())
+    }
 }
 
 // Application data passed to endpoints
@@ -444,6 +506,37 @@ mod tests {
     }
 
     #[actix_web::test]
+    async fn test_client_address_forwarded_compact() {
+        // Initialize the application
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(AppData {
+                    debug: false,
+                    verbose: false,
+                    asn_database_file: String::from("GeoLite2-ASN.mmdb"),
+                    city_database_file: String::from("GeoLite2-City.mmdb"),
+                }))
+                .service(client_address),
+        )
+        .await;
+
+        // Send a request to the `client_address` endpoint
+        let req = test::TestRequest::get()
+            .uri("/address?compact")
+            .insert_header(("Forwarded", "for=4.3.2.1"))
+            .to_request();
+
+        // Send the request and parse the response as JSON
+        let result: LookupResult = test::call_and_read_body_json(&app, req).await;
+
+        // Assert the response
+        assert_eq!(
+            result.address,
+            String::from("4.3.2.1").parse::<IpAddr>().unwrap()
+        );
+    }
+
+    #[actix_web::test]
     async fn test_client_address_x_forwarded_for() {
         // Initialize the application
         let app = test::init_service(
@@ -505,6 +598,36 @@ mod tests {
     }
 
     #[actix_web::test]
+    async fn test_specific_address_ipv4_compact() {
+        // Initialize the application
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(AppData {
+                    debug: false,
+                    verbose: false,
+                    asn_database_file: String::from("GeoLite2-ASN.mmdb"),
+                    city_database_file: String::from("GeoLite2-City.mmdb"),
+                }))
+                .service(specific_address),
+        )
+        .await;
+
+        // Send a request to the `client_address` endpoint
+        let req = test::TestRequest::get()
+            .uri("/address/4.3.2.1?compact")
+            .to_request();
+
+        // Send the request and parse the response as JSON
+        let result: LookupResult = test::call_and_read_body_json(&app, req).await;
+
+        // Assert the response
+        assert_eq!(
+            result.address,
+            String::from("4.3.2.1").parse::<IpAddr>().unwrap()
+        );
+    }
+
+    #[actix_web::test]
     async fn test_specific_address_ipv6() {
         // Initialize the application
         let app = test::init_service(
@@ -532,5 +655,55 @@ mod tests {
             result.address,
             String::from("2600::1").parse::<IpAddr>().unwrap()
         );
+    }
+
+    #[actix_web::test]
+    async fn test_ping() {
+        // Initialize the application
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(AppData {
+                    debug: false,
+                    verbose: false,
+                    asn_database_file: String::from("GeoLite2-ASN.mmdb"),
+                    city_database_file: String::from("GeoLite2-City.mmdb"),
+                }))
+                .service(ping),
+        )
+        .await;
+
+        // Send a request to the `ping` endpoint
+        let req = test::TestRequest::get().uri("/ping").to_request();
+
+        // Send the request and parse the response as JSON
+        let result: PongResponse = test::call_and_read_body_json(&app, req).await;
+
+        // Assert the response
+        assert_eq!(result.ping, String::from("pong"));
+    }
+
+    #[actix_web::test]
+    async fn test_healthcheck() {
+        // Initialize the application
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(AppData {
+                    debug: false,
+                    verbose: false,
+                    asn_database_file: String::from("GeoLite2-ASN.mmdb"),
+                    city_database_file: String::from("GeoLite2-City.mmdb"),
+                }))
+                .service(healthcheck),
+        )
+        .await;
+
+        // Send a request to the `healthcheck` endpoint
+        let req = test::TestRequest::get().uri("/healthcheck").to_request();
+
+        // Send the request and parse the response as JSON
+        let result: HealthCheckResponse = test::call_and_read_body_json(&app, req).await;
+
+        // Assert the response
+        assert_eq!(result.is_healthy, true);
     }
 }
