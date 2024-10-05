@@ -5,9 +5,9 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.9.0"
-actix-web-prom = "0.8.0"
+actix-web-prom = "0.9.0"
 chrono = "0.4.38"
-clap = { version = "4.5.18", features = ["derive"] }
+clap = { version = "4.5.19", features = ["derive"] }
 env_logger = "0.11.5"
 log = "0.4.22"
 maxminddb = "0.24.0"
