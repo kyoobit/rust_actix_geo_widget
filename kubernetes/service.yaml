@@ -1,0 +1,13 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: actix-geo-widget
+  namespace: geo-widget
+spec:
+  selector:
+    app: actix-geo-widget
+  ports:
+    - protocol: TCP
+      port: 8888
+      targetPort: 8888

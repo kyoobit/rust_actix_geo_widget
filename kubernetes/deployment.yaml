@@ -1,0 +1,38 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: actix-geo-widget
+    version: latest
+  name: actix-geo-widget
+  namespace: geo-widget
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: actix-geo-widget
+  template:
+    metadata:
+      labels:
+        app: actix-geo-widget
+    spec:
+      volumes:
+        - name: geo-widget-db
+          persistentVolumeClaim:
+            claimName: geo-widget
+      containers:
+        - name: actix-geo-widget
+          image: ghcr.io/kyoobit/actix-geo-widget:latest
+          args:
+            - --verbose
+            - --asn-database-file
+            - /var/db/GeoLite2-ASN.mmdb
+            - --city-database-file
+            - /var/db/GeoLite2-City.mmdb
+          ports:
+            - containerPort: 8888
+              name: "geo-widget"
+          volumeMounts:
+            - mountPath: "/var/db"
+              name: geo-widget-db
