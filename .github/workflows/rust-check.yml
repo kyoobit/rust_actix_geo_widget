@@ -1,19 +1,34 @@
-name: Rust Check
+name: Build and Deliver
 
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  schedule:
+    ## Rebuild and push a container twice a week to keep the database fresh.
+    ## Note: * is a special character in YAML so you have to quote this string
+    ## ┌───────────── minute (0 - 59)
+    ## │ ┌───────────── hour (0 - 23)
+    ## │ │ ┌───────────── day of the month (1 - 31)
+    ## │ │ │ ┌───────────── month (1 - 12 or JAN-DEC)
+    ## │ │ │ │ ┌───────────── day of the week (0 - 6 or SUN-SAT)
+    ## * * * * *
+    - cron:  '31 13 * * 2,4'
 
 env:
   CARGO_TERM_COLOR: always
+  IMAGE_NAME: actix-geo-widget
 
 jobs:
+
+  ## This runs format, lint, and functional tests.
   build:
     runs-on: ubuntu-latest
     steps:
+    ## https://github.com/actions/checkout
     - uses: actions/checkout@v4
+    ## https://github.com/dtolnay/rust-toolchain
     - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: stable
@@ -35,3 +50,42 @@ jobs:
 
     - name: Run tests
       run: make test
+
+  ## This builds a container image and then pushes the image to GitHub Packages.
+  push:
+    ## 
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+
+    steps:
+      ## https://github.com/actions/checkout
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build . --file Dockerfile --tag $IMAGE_NAME --label "runnumber=${GITHUB_RUN_ID}"
+
+      - name: Login to the registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Push the image to the registry
+        run: |
+          IMAGE_ID=ghcr.io/${{ github.repository_owner }}/$IMAGE_NAME
+
+          ## This changes all uppercase characters to lowercase.
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+
+          ## This strips the git ref prefix from the version.
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
+
+          ## This strips the "v" prefix from the tag name.
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+
+          [ "$VERSION" == "main" ] && VERSION=latest
+
+          echo IMAGE_ID=$IMAGE_ID
+          echo VERSION=$VERSION
+          docker tag $IMAGE_NAME $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
