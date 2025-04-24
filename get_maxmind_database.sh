@@ -134,7 +134,7 @@ for edition_id in $(echo ${edition} | sed 's/,/ /g'); do
         rmdir "${output}/$(dirname ${edition_mmdb})";
 
         ## Remove the archive
-        rm '${output}/${edition_id}.tar.gz';
+        rm "${output}/${edition_id}.tar.gz";
 
     fi
 
