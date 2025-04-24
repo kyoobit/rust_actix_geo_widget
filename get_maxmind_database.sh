@@ -2,6 +2,7 @@
 
 
 # Defaults
+default_output="$(pwd)";
 default_url='https://download.maxmind.com/app/geoip_download'
 
 ## Help message
@@ -24,12 +25,14 @@ arguments:
   -k, --key <KEY>       API key
   -u, --unpack          Unpack the mmdb from the downloaded archive and remove
                         the archive file
+  -o, --out             Output path to download archive files into (default: $(pwd))
   --url                 URL base used to download the edition
                         Default: ${default_url}
 
 Example usage:
   $(basename $0) --key <KEY> --database GeoLite2-ASN
   $(basename $0) -u -e GeoLite2-ASN,GeoLite2-City -k <KEY>
+  $(basename $0) -u -e GeoLite2-ASN,GeoLite2-City -k <KEY> -o /mnt/data/geo-widget
 EOM
 
 ## Catch and exit on -h | --help
@@ -59,6 +62,10 @@ do
         -u | --unpack)
             unpack="unpack";
             shift;
+        ;;
+        -o | --out)
+            output="$2";
+            shift 2;
         ;;
         --url)
             url="$2";
@@ -97,6 +104,8 @@ fi
 ## Get the edition IDs and unpack as requested
 for edition_id in $(echo ${edition} | sed 's/,/ /g'); do
 
+    echo "$(date '+[%Y-%m-%d %H:%M:%S %Z]') Downloading content to: ${output:=${default_output}}";
+
     ## Format the URL for the edition ID
     edition_url="${url:=${default_url}}?edition_id=${edition_id}&suffix=tar.gz";
 
@@ -104,28 +113,28 @@ for edition_id in $(echo ${edition} | sed 's/,/ /g'); do
     echo "$(date '+[%Y-%m-%d %H:%M:%S %Z]') GET '${edition_url}&license_key=<REDACTED>'";
 
     ## Make the request for the edition ID
-    curl -sL "${edition_url}&license_key=${key}" -o ${edition_id}.tar.gz;
+    curl -sL "${edition_url}&license_key=${key}" -o "${output}/${edition_id}.tar.gz";
 
     ## Unpack the archive file
     if [[ -n ${unpack} ]]; then
 
         ## Locate the exact mmdb file to extract
-        edition_mmdb=$(tar ztf ${edition_id}.tar.gz | grep mmdb);
+        edition_mmdb=$(tar --list --gzip --file="${output}/${edition_id}.tar.gz" | grep "mmdb");
 
         ## Message what will be unpacked
         echo "$(date '+[%Y-%m-%d %H:%M:%S %Z]') Unpacking ${edition_mmdb} from ${edition_id}.tar.gz";
 
-        ## Extract the edition mmdb from the archive
-        tar -zxf ${edition_id}.tar.gz ${edition_mmdb};
+        ## Extract the edition mmdb from the archive into the output directory
+        tar --extract --gzip --file="${output}/${edition_id}.tar.gz" --directory="${output}/" "${edition_mmdb}";
 
         ## Move the edition mmdb into the current directory
-        mv ./${edition_mmdb} ./$(basename ${edition_mmdb});
+        mv "${output}/${edition_mmdb}" "${output}/$(basename ${edition_mmdb})";
 
         ## Remove the empty directory
-        rmdir ./$(dirname ${edition_mmdb});
+        rmdir "${output}/$(dirname ${edition_mmdb})";
 
         ## Remove the archive
-        rm ${edition_id}.tar.gz
+        rm '${output}/${edition_id}.tar.gz';
 
     fi
 
