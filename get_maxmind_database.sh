@@ -106,6 +106,11 @@ for edition_id in $(echo ${edition} | sed 's/,/ /g'); do
 
     echo "$(date '+[%Y-%m-%d %H:%M:%S %Z]') Downloading content to: ${output:=${default_output}}";
 
+    if [[ ! -d "${output}" ]] || [[ ! -w "${output}" ]]; then
+        echo "$(date '+[%Y-%m-%d %H:%M:%S %Z]') ERROR Directory path does not exist or is not writable: ${output}";
+        exit 1;
+    fi
+
     ## Format the URL for the edition ID
     edition_url="${url:=${default_url}}?edition_id=${edition_id}&suffix=tar.gz";
 
