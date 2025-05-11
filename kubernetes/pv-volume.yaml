@@ -13,4 +13,4 @@ spec:
   accessModes:
     - ReadOnlyMany
   hostPath:
-    path: "/data/geo-widget"
+    path: "/mnt/data/geo-widget"
