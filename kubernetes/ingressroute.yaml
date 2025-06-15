@@ -1,0 +1,16 @@
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: actix-geo-widget
+  namespace: geo-widget
+spec:
+  entryPoints:
+  - web # :80
+  - websecure # :443
+  routes:
+  - match: Host(`actix-geo-widget.200s.lab`)
+    kind: Rule
+    services:
+    - name: actix-geo-widget
+      port: 8888
