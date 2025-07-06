@@ -376,7 +376,7 @@ fn print_database_metadata(database_file: &String, debug: bool, verbose: bool) {
     }
     */
     if debug {
-        println!("database_metadata: {:?}", database_metadata);
+        println!("database_metadata: {database_metadata:?}");
     }
     if debug || verbose {
         // Convert the epoch unix timestamp to RFC 8901 format
@@ -461,7 +461,7 @@ fn main() {
             args.debug,
             args.verbose,
         );
-        println!("{:?}", result);
+        println!("{result:?}");
     // Start the web service
     } else {
         let _ = actix_main(args);
