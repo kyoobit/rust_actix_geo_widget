@@ -3,7 +3,7 @@ FROM docker.io/library/rust:alpine AS builder
 ## Add os build dependencies
 ## podman run --rm --interactive --tty --name alpine docker.io/library/alpine:latest /bin/ash
 ## apk update
-RUN apk add --no-cache musl-dev=~1.2.5
+RUN apk add --no-cache musl-dev=~1.2
 
 ## Copy the source files for the project
 WORKDIR /actix-geo-widget
